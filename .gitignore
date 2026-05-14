@@ -42,6 +42,7 @@ local
 .hive/
 .opencode/
 .claude/
+.worktrees/
 .ignore
 opencode
 oh-my-opencode
