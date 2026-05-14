@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ConfigLoadWarning } from './loader';
 import { loadAgentPrompt, loadPluginConfig } from './loader';
+import { MultiplexerTypeSchema } from './schema';
 
 // Test deepMerge indirectly through loadPluginConfig behavior
 // since deepMerge is not exported
@@ -237,6 +238,12 @@ describe('loadPluginConfig', () => {
     expect(config.agents?.oracle?.model).toBe('fallback/default-config');
 
     fs.rmSync(customDir, { recursive: true, force: true });
+  });
+});
+
+describe('multiplexer type schema', () => {
+  test('accepts muxy', () => {
+    expect(MultiplexerTypeSchema.parse('muxy')).toBe('muxy');
   });
 });
 

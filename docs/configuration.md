@@ -104,7 +104,7 @@ Presets can also be switched at runtime without restarting using the `/preset` c
 | `agents.<agent>.displayName` | string | — | Custom user-facing alias for the agent in the active config |
 | `disabled_agents` | string[] | `["observer"]` | Agent names to disable globally. Set to `[]` to enable Observer; this is global, not per-preset |
 | `autoUpdate` | boolean | `true` | Automatically install plugin updates in the background; set to `false` for notification-only mode |
-| `multiplexer.type` | string | `"none"` | Multiplexer mode: `auto`, `tmux`, `zellij`, or `none` |
+| `multiplexer.type` | string | `"none"` | Multiplexer mode: `auto`, `muxy`, `tmux`, `zellij`, or `none` |
 | `multiplexer.layout` | string | `"main-vertical"` | Layout preset: `main-vertical`, `main-horizontal`, `tiled`, `even-horizontal`, `even-vertical` |
 | `multiplexer.main_pane_size` | number | `60` | Main pane size as percentage (20–80) |
 | `divoom.enabled` | boolean | `false` | Enable Divoom Bluetooth display status GIFs for plugin load and delegated agent calls |

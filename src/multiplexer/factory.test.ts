@@ -7,10 +7,14 @@ async function importFreshFactory(suffix: string) {
 describe('multiplexer factory', () => {
   const originalTmux = process.env.TMUX;
   const originalTmuxPane = process.env.TMUX_PANE;
+  const originalMuxySocket = process.env.MUXY_SOCKET_PATH;
+  const originalMuxyPane = process.env.MUXY_PANE_ID;
 
   afterEach(() => {
     process.env.TMUX = originalTmux;
     process.env.TMUX_PANE = originalTmuxPane;
+    process.env.MUXY_SOCKET_PATH = originalMuxySocket;
+    process.env.MUXY_PANE_ID = originalMuxyPane;
   });
 
   test('returns a fresh tmux instance per call', async () => {
@@ -67,5 +71,54 @@ describe('multiplexer factory', () => {
     expect(first).not.toBeNull();
     expect(second).not.toBeNull();
     expect(Object.is(first, second)).toBe(false);
+  });
+
+  test('prefers muxy during auto detection', async () => {
+    process.env.MUXY_SOCKET_PATH = '/tmp/muxy.sock';
+    process.env.MUXY_PANE_ID = '123e4567-e89b-12d3-a456-426614174000';
+    process.env.TMUX = '/tmp/tmux-1000/default,123,0';
+    process.env.ZELLIJ = '1';
+
+    const { getMultiplexer, getAutoMultiplexerType } =
+      await importFreshFactory('muxy-auto');
+    expect(getAutoMultiplexerType()).toBe('muxy');
+    expect(
+      getMultiplexer({
+        type: 'auto',
+        layout: 'main-vertical',
+        main_pane_size: 60,
+      })?.type,
+    ).toBe('muxy');
+  });
+
+  test('creates explicit muxy instance', async () => {
+    process.env.MUXY_SOCKET_PATH = '/tmp/muxy.sock';
+    process.env.MUXY_PANE_ID = '123e4567-e89b-12d3-a456-426614174000';
+
+    const { getMultiplexer } = await importFreshFactory('muxy-explicit');
+    expect(
+      getMultiplexer({
+        type: 'muxy',
+        layout: 'main-vertical',
+        main_pane_size: 60,
+      })?.type,
+    ).toBe('muxy');
+  });
+
+  test('falls back from invalid muxy pane id to tmux', async () => {
+    process.env.MUXY_SOCKET_PATH = '/tmp/muxy.sock';
+    process.env.MUXY_PANE_ID = 'not-a-uuid';
+    process.env.TMUX = '/tmp/tmux-1000/default,123,0';
+
+    const { getAutoMultiplexerType, getMultiplexer } =
+      await importFreshFactory('muxy-invalid');
+    expect(getAutoMultiplexerType()).toBe('tmux');
+    expect(
+      getMultiplexer({
+        type: 'auto',
+        layout: 'main-vertical',
+        main_pane_size: 60,
+      })?.type,
+    ).toBe('tmux');
   });
 });

@@ -1,6 +1,6 @@
 # Multiplexer Integration Guide
 
-Use tmux or Zellij to watch subagents work in live panes while OpenCode keeps running in your main session.
+Use Muxy, tmux, or Zellij to watch subagents work in live panes while OpenCode keeps running in your main session.
 
 ## Table of Contents
 
@@ -45,16 +45,30 @@ omos() {
 
 ## Quick Start
 
+### Muxy
+
+1. Use a Muxy version that includes the terminal-control socket API.
+2. Open your project terminal in Muxy.
+3. Start OpenCode with `OPENCODE_PORT` and `--port`.
+4. Set `multiplexer.type` to `muxy` or `auto`.
+
+Example:
+
+```bash
+port=4096
+OPENCODE_PORT="$port" opencode --port "$port"
+```
+
 ### 1. Enable the multiplexer
 
 Edit `~/.config/opencode/oh-my-opencode-slim.json` (or `.jsonc`):
 
-**Auto-detect (recommended):**
+**Muxy:**
 
 ```jsonc
 {
   "multiplexer": {
-    "type": "auto",
+    "type": "muxy",
     "layout": "main-vertical",
     "main_pane_size": 60
   }
@@ -73,6 +87,18 @@ Edit `~/.config/opencode/oh-my-opencode-slim.json` (or `.jsonc`):
 }
 ```
 
+**Auto-detect (recommended):**
+
+```jsonc
+{
+  "multiplexer": {
+    "type": "auto",
+    "layout": "main-vertical",
+    "main_pane_size": 60
+  }
+}
+```
+
 **Zellij only:**
 
 ```jsonc
@@ -83,20 +109,26 @@ Edit `~/.config/opencode/oh-my-opencode-slim.json` (or `.jsonc`):
 }
 ```
 
-### 2. Start OpenCode inside tmux or Zellij
+### 2. Start OpenCode inside Muxy, tmux, or Zellij
+
+**Muxy:**
+
+```bash
+OPENCODE_PORT=4096 opencode --port 4096
+```
 
 **Tmux:**
 
 ```bash
 tmux
-opencode --port 4096
+OPENCODE_PORT=4096 opencode --port 4096
 ```
 
 **Zellij:**
 
 ```bash
 zellij
-opencode --port 4096
+OPENCODE_PORT=4096 opencode --port 4096
 ```
 
 ### 3. Trigger delegated work
@@ -127,7 +159,7 @@ Please analyze this codebase and create a documentation structure.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `type` | string | `"none"` | `"auto"`, `"tmux"`, `"zellij"`, or `"none"` |
+| `type` | string | `"none"` | `"auto"`, `"muxy"`, `"tmux"`, `"zellij"`, or `"none"` |
 | `layout` | string | `"main-vertical"` | Layout preset for tmux only |
 | `main_pane_size` | number | `60` | Main pane size percentage for tmux only (`20`-`80`) |
 
@@ -137,6 +169,7 @@ Please analyze this codebase and create a documentation structure.
 |-------------|--------|-------|
 | **Tmux** | ✅ Supported | Full layout control with `main-vertical`, `main-horizontal`, `tiled`, and more |
 | **Zellij** | ✅ Supported | Creates a dedicated `opencode-agents` tab and reuses the default pane |
+| **Muxy** | ✅ Supported | Uses the terminal-control socket API for live sub-agent panes |
 
 ### Legacy tmux config
 
@@ -153,6 +186,14 @@ Older configs still work:
 ```
 
 This is converted automatically to `multiplexer.type: "tmux"`.
+
+### Troubleshooting
+
+- **`MUXY_SOCKET_PATH` not set**: start OpenCode from a Muxy terminal session.
+- **Socket unavailable**: update to a Muxy version with the terminal-control socket API.
+- **`MUXY_PANE_ID` missing or invalid**: `auto` only selects Muxy when `MUXY_SOCKET_PATH` is set and `MUXY_PANE_ID` is a valid UUID; otherwise it falls back to tmux or Zellij. Starting OpenCode from a Muxy pane should set both.
+- **No panes appear**: confirm OpenCode was started with `--port` and the same `OPENCODE_PORT`.
+- **Nested tmux/zellij**: `auto` prefers Muxy first; set `multiplexer.type` to `tmux` or `zellij` to force a specific multiplexer.
 
 ---
 

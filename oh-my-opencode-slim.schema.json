@@ -392,6 +392,7 @@
           "type": "string",
           "enum": [
             "auto",
+            "muxy",
             "tmux",
             "zellij",
             "none"
