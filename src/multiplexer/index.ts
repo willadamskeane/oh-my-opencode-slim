@@ -7,6 +7,7 @@ export {
   getMultiplexer,
   startAvailabilityCheck,
 } from './factory';
+export { MuxyMultiplexer } from './muxy';
 export {
   MultiplexerSessionManager,
   TmuxSessionManager,
