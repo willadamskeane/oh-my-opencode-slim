@@ -414,11 +414,6 @@
           "type": "number",
           "minimum": 20,
           "maximum": 80
-        },
-        "idle_close_delay_ms": {
-          "default": 0,
-          "type": "number",
-          "minimum": 0
         }
       }
     },

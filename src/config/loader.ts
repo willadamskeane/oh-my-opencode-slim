@@ -399,7 +399,6 @@ function migrateTmuxToMultiplexer(config: PluginConfig): PluginConfig {
         type: 'tmux',
         layout: config.tmux.layout ?? 'main-vertical',
         main_pane_size: config.tmux.main_pane_size ?? 60,
-        idle_close_delay_ms: 0,
       },
     };
   }

@@ -222,7 +222,6 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       type: config.multiplexer?.type ?? 'none',
       layout: config.multiplexer?.layout ?? 'main-vertical',
       main_pane_size: config.multiplexer?.main_pane_size ?? 60,
-      idle_close_delay_ms: config.multiplexer?.idle_close_delay_ms ?? 0,
     };
 
     // Get multiplexer instance for capability checks

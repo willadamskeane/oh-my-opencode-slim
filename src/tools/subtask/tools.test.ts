@@ -108,6 +108,84 @@ describe('subtask tool', () => {
     }
   });
 
+  test('uses opencode run when an attachable server is available', async () => {
+    const directory = makeTempDir();
+    const binDir = path.join(directory, 'bin');
+    const argsFile = path.join(directory, 'opencode-args.txt');
+    const originalPath = process.env.PATH;
+    const originalArgsFile = process.env.OPENCODE_ARGS_FILE;
+    try {
+      fs.mkdirSync(path.join(directory, 'src'));
+      fs.mkdirSync(binDir);
+      fs.writeFileSync(path.join(directory, 'src/index.ts'), 'export {}\n');
+      fs.writeFileSync(
+        path.join(binDir, 'opencode'),
+        '#!/bin/sh\n: > "$OPENCODE_ARGS_FILE"\nfor arg in "$@"; do\n  printf "%s\\n" "$arg" >> "$OPENCODE_ARGS_FILE"\ndone\n',
+        { mode: 0o755 },
+      );
+      process.env.PATH = `${binDir}:${originalPath ?? ''}`;
+      process.env.OPENCODE_ARGS_FILE = argsFile;
+
+      const sessionCreate = mock(async () => ({ data: { id: 'ses_new' } }));
+      const sessionPrompt = mock(async () => ({}));
+      const sessionMessages = mock(async () => ({
+        data: [
+          {
+            info: { role: 'assistant' },
+            parts: [
+              {
+                type: 'text',
+                text: '<subtask_summary>\nCLI summary\n</subtask_summary>',
+              },
+            ],
+          },
+        ],
+      }));
+      const sessionAbort = mock(async () => ({}));
+      const state = createSubtaskState();
+      const tool = createSubtaskTool(
+        {
+          directory,
+          serverUrl: new URL('http://127.0.0.1:4096'),
+          client: {
+            session: {
+              abort: sessionAbort,
+              create: sessionCreate,
+              messages: sessionMessages,
+              prompt: sessionPrompt,
+            },
+          },
+        } as any,
+        state,
+        new SubagentDepthTracker(),
+      );
+
+      const result = await tool.execute(
+        { prompt: 'Continue implementation', files: ['src/index.ts'] },
+        { sessionID: 'ses_old' } as any,
+      );
+
+      expect(result).toContain('CLI summary');
+      expect(sessionPrompt).not.toHaveBeenCalled();
+      const cliArgs = fs.readFileSync(argsFile, 'utf8').trim().split('\n');
+      expect(cliArgs).toContain('run');
+      expect(cliArgs).toContain('--attach');
+      expect(cliArgs).toContain('http://127.0.0.1:4096/');
+      expect(cliArgs).toContain('--session');
+      expect(cliArgs).toContain('ses_new');
+      expect(cliArgs).toContain('--file');
+      expect(cliArgs).toContain('src/index.ts');
+    } finally {
+      process.env.PATH = originalPath;
+      if (originalArgsFile === undefined) {
+        delete process.env.OPENCODE_ARGS_FILE;
+      } else {
+        process.env.OPENCODE_ARGS_FILE = originalArgsFile;
+      }
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test('normalizes nested worker summary tags', async () => {
     const directory = makeTempDir();
     try {
