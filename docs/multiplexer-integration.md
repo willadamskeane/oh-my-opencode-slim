@@ -130,6 +130,7 @@ Please analyze this codebase and create a documentation structure.
 | `type` | string | `"none"` | `"auto"`, `"tmux"`, `"zellij"`, or `"none"` |
 | `layout` | string | `"main-vertical"` | Layout preset for tmux only |
 | `main_pane_size` | number | `60` | Main pane size percentage for tmux only (`20`-`80`) |
+| `idle_close_delay_ms` | number | `0` | Delay before closing an idle child pane |
 
 ### Supported Multiplexers
 

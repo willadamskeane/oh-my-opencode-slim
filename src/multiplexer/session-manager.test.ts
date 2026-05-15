@@ -44,6 +44,7 @@ const defaultMultiplexerConfig = {
   type: 'tmux' as const,
   layout: 'main-vertical' as const,
   main_pane_size: 60,
+  idle_close_delay_ms: 0,
 };
 
 function createDeferred<T>() {
@@ -235,6 +236,36 @@ describe('MultiplexerSessionManager', () => {
       await (manager as any).pollSessions();
 
       expect(mockMultiplexer.closePane).toHaveBeenCalledWith('p-1');
+    });
+
+    test('delays idle close when configured', async () => {
+      const ctx = createMockContext();
+      mockMultiplexer.spawnPane.mockResolvedValue({
+        success: true,
+        paneId: 'p-delay',
+      });
+
+      const manager = new MultiplexerSessionManager(ctx, {
+        ...defaultMultiplexerConfig,
+        idle_close_delay_ms: 10,
+      });
+
+      await manager.onSessionCreated({
+        type: 'session.created',
+        properties: { info: { id: 'c-delay', parentID: 'p1' } },
+      });
+
+      await manager.onSessionStatus({
+        type: 'session.status',
+        properties: {
+          sessionID: 'c-delay',
+          status: { type: 'idle' },
+        },
+      });
+
+      expect(mockMultiplexer.closePane).not.toHaveBeenCalled();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(mockMultiplexer.closePane).toHaveBeenCalledWith('p-delay');
     });
 
     test('does not close on transient status absence', async () => {

@@ -61,8 +61,10 @@ export class MultiplexerSessionManager {
   private knownSessions = new Map<string, KnownSession>();
   private spawningSessions = new Set<string>();
   private closingSessions = new Map<string, Promise<void>>();
+  private idleCloseTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private pollInterval?: ReturnType<typeof setInterval>;
   private enabled = false;
+  private idleCloseDelayMs: number;
 
   constructor(ctx: PluginInput, config: MultiplexerConfig) {
     this.client = ctx.client;
@@ -70,6 +72,7 @@ export class MultiplexerSessionManager {
     const defaultPort = process.env.OPENCODE_PORT ?? '4096';
     this.serverUrl =
       ctx.serverUrl?.toString() ?? `http://localhost:${defaultPort}`;
+    this.idleCloseDelayMs = config.idle_close_delay_ms ?? 0;
 
     this.multiplexer = getMultiplexer(config);
     this.enabled =
@@ -81,6 +84,7 @@ export class MultiplexerSessionManager {
       enabled: this.enabled,
       type: config.type,
       serverUrl: this.serverUrl,
+      idleCloseDelayMs: this.idleCloseDelayMs,
     });
   }
 
@@ -198,11 +202,12 @@ export class MultiplexerSessionManager {
     if (!sessionId) return;
 
     if (event.properties?.status?.type === 'idle') {
-      await this.closeSession(sessionId, 'idle');
+      this.scheduleIdleClose(sessionId);
       return;
     }
 
     if (event.properties?.status?.type === 'busy') {
+      this.cancelIdleClose(sessionId);
       await this.respawnIfKnown(sessionId);
     }
   }
@@ -281,17 +286,53 @@ export class MultiplexerSessionManager {
       }
 
       for (const { sessionId, reason } of sessionsToClose) {
-        await this.closeSession(sessionId, reason);
+        if (reason === 'idle') {
+          this.scheduleIdleClose(sessionId);
+        } else {
+          await this.closeSession(sessionId, reason);
+        }
       }
     } catch (err) {
       log('[multiplexer-session-manager] poll error', { error: String(err) });
     }
   }
 
+  private scheduleIdleClose(sessionId: string): void {
+    if (this.idleCloseTimers.has(sessionId)) return;
+    if (this.idleCloseDelayMs <= 0) {
+      void this.closeSession(sessionId, 'idle');
+      return;
+    }
+
+    log('[multiplexer-session-manager] scheduling idle pane close', {
+      sessionId,
+      delayMs: this.idleCloseDelayMs,
+    });
+
+    const timer = setTimeout(() => {
+      this.idleCloseTimers.delete(sessionId);
+      void this.closeSession(sessionId, 'idle');
+    }, this.idleCloseDelayMs);
+    timer.unref?.();
+    this.idleCloseTimers.set(sessionId, timer);
+  }
+
+  private cancelIdleClose(sessionId: string): void {
+    const timer = this.idleCloseTimers.get(sessionId);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.idleCloseTimers.delete(sessionId);
+    log('[multiplexer-session-manager] canceled idle pane close', {
+      sessionId,
+    });
+  }
+
   private async closeSession(
     sessionId: string,
     reason: CloseReason,
   ): Promise<void> {
+    this.cancelIdleClose(sessionId);
+
     if (reason === 'deleted') {
       this.knownSessions.delete(sessionId);
     }
@@ -438,6 +479,10 @@ export class MultiplexerSessionManager {
 
   async cleanup(): Promise<void> {
     this.stopPolling();
+    for (const timer of this.idleCloseTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.idleCloseTimers.clear();
 
     if (this.closingSessions.size > 0) {
       await Promise.all(this.closingSessions.values());

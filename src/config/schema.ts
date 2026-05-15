@@ -139,6 +139,7 @@ export const MultiplexerConfigSchema = z.object({
   type: MultiplexerTypeSchema.default('none'),
   layout: MultiplexerLayoutSchema.default('main-vertical'),
   main_pane_size: z.number().min(20).max(80).default(60), // percentage for main pane
+  idle_close_delay_ms: z.number().min(0).default(0), // delay before closing idle child panes
 });
 
 export type MultiplexerConfig = z.infer<typeof MultiplexerConfigSchema>;

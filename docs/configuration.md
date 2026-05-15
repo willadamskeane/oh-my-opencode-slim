@@ -107,6 +107,7 @@ Presets can also be switched at runtime without restarting using the `/preset` c
 | `multiplexer.type` | string | `"none"` | Multiplexer mode: `auto`, `tmux`, `zellij`, or `none` |
 | `multiplexer.layout` | string | `"main-vertical"` | Layout preset: `main-vertical`, `main-horizontal`, `tiled`, `even-horizontal`, `even-vertical` |
 | `multiplexer.main_pane_size` | number | `60` | Main pane size as percentage (20–80) |
+| `multiplexer.idle_close_delay_ms` | number | `0` | Delay before closing an idle child pane |
 | `divoom.enabled` | boolean | `false` | Enable Divoom Bluetooth display status GIFs for plugin load and delegated agent calls |
 | `divoom.python` | string | Divoom MiniToo bundled Python | Python executable used to run Divoom MiniToo's `divoom_send.py` helper |
 | `divoom.script` | string | Divoom MiniToo `divoom_send.py` | Divoom sender script path |
