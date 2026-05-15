@@ -10,6 +10,8 @@ import type { PluginInput, ToolDefinition } from '@opencode-ai/plugin';
 import { tool } from '@opencode-ai/plugin';
 import { extractSessionResult, promptWithTimeout } from '../../utils/session';
 import type { SubagentDepthTracker } from '../../utils/subagent-depth';
+import { crossSpawn } from '../../utils/compat';
+import { log } from '../../utils/logger';
 import {
   buildSyntheticFileParts,
   cleanFileReference,
@@ -38,6 +40,92 @@ function getAbortSignal(context: unknown): AbortSignal | undefined {
     'aborted' in signal
     ? (signal as AbortSignal)
     : undefined;
+}
+
+function resolveServerUrl(ctx: PluginInput): string {
+  const defaultPort = process.env.OPENCODE_PORT ?? '4096';
+  return ctx.serverUrl?.toString() ?? `http://localhost:${defaultPort}`;
+}
+
+async function runSessionWithCLI(input: {
+  serverUrl: string;
+  sessionId: string;
+  directory: string;
+  prompt: string;
+  files: Iterable<string>;
+  abortSignal?: AbortSignal;
+}): Promise<boolean> {
+  log('[subtask] running worker through opencode CLI', {
+    sessionId: input.sessionId,
+    serverUrl: input.serverUrl,
+  });
+
+  const args = [
+    'run',
+    '--attach',
+    input.serverUrl,
+    '--session',
+    input.sessionId,
+    '--dir',
+    input.directory,
+    '--agent',
+    'orchestrator',
+  ];
+
+  for (const file of input.files) {
+    args.push('--file', file);
+  }
+  args.push('--');
+  args.push(input.prompt);
+
+  const proc = crossSpawn(['opencode', ...args], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+    stdin: 'ignore',
+    cwd: input.directory,
+  });
+
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    proc.kill('SIGTERM');
+  }, SUBTASK_TIMEOUT_MS);
+  timeout.unref?.();
+
+  const abort = () => proc.kill('SIGTERM');
+  input.abortSignal?.addEventListener('abort', abort, { once: true });
+
+  try {
+    const exitCode = await proc.exited;
+    if (timedOut) {
+      throw new Error('Subtask worker timed out');
+    }
+    if (input.abortSignal?.aborted) {
+      throw new Error('Subtask worker aborted');
+    }
+    const ok = exitCode === 0;
+    if (!ok) {
+      log('[subtask] opencode CLI worker exited non-zero', {
+        sessionId: input.sessionId,
+        exitCode,
+        stderr: (await proc.stderr()).trim(),
+      });
+    }
+    return ok;
+  } catch (error) {
+    if (timedOut || input.abortSignal?.aborted) {
+      throw error;
+    }
+    log('[subtask] opencode CLI worker failed', {
+      sessionId: input.sessionId,
+      error: String(error),
+    });
+    return false;
+  } finally {
+    clearTimeout(timeout);
+    input.abortSignal?.removeEventListener('abort', abort);
+    await Promise.allSettled([proc.stdout(), proc.stderr()]);
+  }
 }
 
 /**
@@ -132,27 +220,39 @@ Do not spawn another subtask.`;
         }
         state.markSession(childSessionID, sessionID);
 
-        await promptWithTimeout(
-          client,
-          {
-            responseStyle: 'data',
-            throwOnError: true,
-            query: { directory },
-            path: { id: childSessionID },
-            body: {
-              agent: 'orchestrator',
-              parts: [
-                {
-                  type: 'text',
-                  text: `${fullPrompt}\n\nInstructions:\n1. Understand the task and relevant file context.\n2. Make only necessary changes.\n3. Run the most relevant validation checks when practical.\n4. Stop when the requested task is done.\n\nReturn your final response in this format:\n\n<subtask_summary>\nStatus: completed | blocked | partial\n\nWhat changed:\n- ...\n\nFiles touched:\n- ...\n\nValidation:\n- ...\n\nRisks / follow-up:\n- ...\n</subtask_summary>`,
-                },
-                ...(await buildSyntheticFileParts(directory, files)),
-              ],
-            },
-          },
-          SUBTASK_TIMEOUT_MS,
+        const workerPrompt = `${fullPrompt}\n\nInstructions:\n1. Understand the task and relevant file context.\n2. Make only necessary changes.\n3. Run the most relevant validation checks when practical.\n4. Stop when the requested task is done.\n\nReturn your final response in this format:\n\n<subtask_summary>\nStatus: completed | blocked | partial\n\nWhat changed:\n- ...\n\nFiles touched:\n- ...\n\nValidation:\n- ...\n\nRisks / follow-up:\n- ...\n</subtask_summary>`;
+        const ranViaCLI = await runSessionWithCLI({
+          serverUrl: resolveServerUrl(ctx),
+          sessionId: childSessionID,
+          directory,
+          prompt: workerPrompt,
+          files,
           abortSignal,
-        );
+        });
+
+        if (!ranViaCLI) {
+          await promptWithTimeout(
+            client,
+            {
+              responseStyle: 'data',
+              throwOnError: true,
+              query: { directory },
+              path: { id: childSessionID },
+              body: {
+                agent: 'orchestrator',
+                parts: [
+                  {
+                    type: 'text',
+                    text: workerPrompt,
+                  },
+                  ...(await buildSyntheticFileParts(directory, files)),
+                ],
+              },
+            },
+            SUBTASK_TIMEOUT_MS,
+            abortSignal,
+          );
+        }
 
         const extraction = await extractSessionResult(client, childSessionID, {
           directory,

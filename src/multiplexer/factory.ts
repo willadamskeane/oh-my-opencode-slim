@@ -4,6 +4,7 @@
 
 import type { MultiplexerConfig, MultiplexerType } from '../config/schema';
 import { log } from '../utils/logger';
+import { isMuxySession, MuxyMultiplexer } from './muxy';
 import { TmuxMultiplexer } from './tmux';
 import type { Multiplexer } from './types';
 import { ZellijMultiplexer } from './zellij';
@@ -27,6 +28,10 @@ export function getMultiplexer(config: MultiplexerConfig): Multiplexer | null {
   let actualType: MultiplexerType;
 
   switch (type) {
+    case 'muxy':
+      multiplexer = new MuxyMultiplexer(config.layout, config.main_pane_size);
+      actualType = 'muxy';
+      break;
     case 'tmux':
       multiplexer = new TmuxMultiplexer(config.layout, config.main_pane_size);
       actualType = 'tmux';
@@ -38,7 +43,10 @@ export function getMultiplexer(config: MultiplexerConfig): Multiplexer | null {
     case 'auto': {
       // Auto-detect based on environment variables only
       // Note: Does NOT fall back to binary availability checks
-      if (process.env.TMUX) {
+      if (isMuxySession()) {
+        multiplexer = new MuxyMultiplexer(config.layout, config.main_pane_size);
+        actualType = 'muxy';
+      } else if (process.env.TMUX) {
         multiplexer = new TmuxMultiplexer(config.layout, config.main_pane_size);
         actualType = 'tmux';
       } else if (process.env.ZELLIJ) {
@@ -73,9 +81,12 @@ export function clearMultiplexerCache(): void {
 
 /**
  * Get the effective multiplexer type for auto mode
- * Returns the actual type that would be used (tmux/zellij/none)
+ * Returns the actual type that would be used (muxy/tmux/zellij/none)
  */
-export function getAutoMultiplexerType(): 'tmux' | 'zellij' | 'none' {
+export function getAutoMultiplexerType(): 'muxy' | 'tmux' | 'zellij' | 'none' {
+  if (isMuxySession()) {
+    return 'muxy';
+  }
   if (process.env.TMUX) {
     return 'tmux';
   }
