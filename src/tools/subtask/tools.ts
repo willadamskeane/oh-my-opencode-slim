@@ -75,6 +75,7 @@ async function runSessionWithCLI(input: {
   for (const file of input.files) {
     args.push('--file', file);
   }
+  args.push('--');
   args.push(input.prompt);
 
   const proc = crossSpawn(['opencode', ...args], {

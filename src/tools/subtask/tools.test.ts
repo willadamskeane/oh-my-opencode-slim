@@ -175,6 +175,7 @@ describe('subtask tool', () => {
       expect(cliArgs).toContain('ses_new');
       expect(cliArgs).toContain('--file');
       expect(cliArgs).toContain('src/index.ts');
+      expect(cliArgs).toContain('--');
     } finally {
       process.env.PATH = originalPath;
       if (originalArgsFile === undefined) {
