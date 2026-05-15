@@ -44,7 +44,10 @@ interface SessionEvent {
 type CloseReason = 'idle' | 'deleted' | 'missing' | 'timeout';
 
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
-const SESSION_MISSING_GRACE_MS = POLL_INTERVAL_BACKGROUND_MS * 3;
+const SESSION_MISSING_GRACE_MS = Math.max(
+  POLL_INTERVAL_BACKGROUND_MS * 12,
+  60 * 1000,
+);
 
 /**
  * Tracks child sessions and spawns/closes multiplexer panes for them.

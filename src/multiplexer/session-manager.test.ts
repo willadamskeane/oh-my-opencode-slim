@@ -255,6 +255,26 @@ describe('MultiplexerSessionManager', () => {
       expect(mockMultiplexer.closePane).not.toHaveBeenCalled();
     });
 
+    test('does not close recently spawned pane when status is briefly missing', async () => {
+      const ctx = createMockContext();
+      const manager = new MultiplexerSessionManager(
+        ctx,
+        defaultMultiplexerConfig,
+      );
+
+      await manager.onSessionCreated({
+        type: 'session.created',
+        properties: { info: { id: 'c-missing', parentID: 'p1' } },
+      });
+
+      ctx.client.session.status.mockResolvedValue({ data: {} });
+      for (let i = 0; i < 10; i++) {
+        await (manager as any).pollSessions();
+      }
+
+      expect(mockMultiplexer.closePane).not.toHaveBeenCalled();
+    });
+
     test('respawns pane on later busy after idle close for resumable session', async () => {
       const ctx = createMockContext();
       const manager = new MultiplexerSessionManager(
