@@ -29,7 +29,7 @@ export function getMultiplexer(config: MultiplexerConfig): Multiplexer | null {
 
   switch (type) {
     case 'muxy':
-      multiplexer = new MuxyMultiplexer();
+      multiplexer = new MuxyMultiplexer(config.layout, config.main_pane_size);
       actualType = 'muxy';
       break;
     case 'tmux':
@@ -44,7 +44,7 @@ export function getMultiplexer(config: MultiplexerConfig): Multiplexer | null {
       // Auto-detect based on environment variables only
       // Note: Does NOT fall back to binary availability checks
       if (isMuxySession()) {
-        multiplexer = new MuxyMultiplexer();
+        multiplexer = new MuxyMultiplexer(config.layout, config.main_pane_size);
         actualType = 'muxy';
       } else if (process.env.TMUX) {
         multiplexer = new TmuxMultiplexer(config.layout, config.main_pane_size);

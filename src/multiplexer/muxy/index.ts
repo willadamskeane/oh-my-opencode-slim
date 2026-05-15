@@ -1,5 +1,6 @@
 import { crossSpawn } from '../../utils/compat';
 import { log } from '../../utils/logger';
+import type { MultiplexerLayout } from '../../config/schema';
 import type { Multiplexer, PaneResult } from '../types';
 
 const UUID_REGEX =
@@ -7,6 +8,11 @@ const UUID_REGEX =
 
 export class MuxyMultiplexer implements Multiplexer {
   readonly type = 'muxy' as const;
+
+  constructor(
+    private readonly layout: MultiplexerLayout = 'main-vertical',
+    private readonly mainPaneSize = 60,
+  ) {}
 
   async isAvailable(): Promise<boolean> {
     return this.isInsideSession();
@@ -39,6 +45,10 @@ export class MuxyMultiplexer implements Multiplexer {
           directory,
           '--source-pane',
           sourcePane,
+          '--layout',
+          this.layout,
+          '--main-pane-size',
+          String(this.mainPaneSize),
         ],
         { stdout: 'pipe', stderr: 'pipe' },
       );
