@@ -11,6 +11,7 @@ import { tool } from '@opencode-ai/plugin';
 import { extractSessionResult, promptWithTimeout } from '../../utils/session';
 import type { SubagentDepthTracker } from '../../utils/subagent-depth';
 import { crossSpawn } from '../../utils/compat';
+import { log } from '../../utils/logger';
 import {
   buildSyntheticFileParts,
   cleanFileReference,
@@ -41,6 +42,11 @@ function getAbortSignal(context: unknown): AbortSignal | undefined {
     : undefined;
 }
 
+function resolveServerUrl(ctx: PluginInput): string {
+  const defaultPort = process.env.OPENCODE_PORT ?? '4096';
+  return ctx.serverUrl?.toString() ?? `http://localhost:${defaultPort}`;
+}
+
 async function runSessionWithCLI(input: {
   serverUrl: string;
   sessionId: string;
@@ -49,6 +55,11 @@ async function runSessionWithCLI(input: {
   files: Iterable<string>;
   abortSignal?: AbortSignal;
 }): Promise<boolean> {
+  log('[subtask] running worker through opencode CLI', {
+    sessionId: input.sessionId,
+    serverUrl: input.serverUrl,
+  });
+
   const args = [
     'run',
     '--attach',
@@ -91,11 +102,23 @@ async function runSessionWithCLI(input: {
     if (input.abortSignal?.aborted) {
       throw new Error('Subtask worker aborted');
     }
-    return exitCode === 0;
+    const ok = exitCode === 0;
+    if (!ok) {
+      log('[subtask] opencode CLI worker exited non-zero', {
+        sessionId: input.sessionId,
+        exitCode,
+        stderr: (await proc.stderr()).trim(),
+      });
+    }
+    return ok;
   } catch (error) {
     if (timedOut || input.abortSignal?.aborted) {
       throw error;
     }
+    log('[subtask] opencode CLI worker failed', {
+      sessionId: input.sessionId,
+      error: String(error),
+    });
     return false;
   } finally {
     clearTimeout(timeout);
@@ -197,17 +220,14 @@ Do not spawn another subtask.`;
         state.markSession(childSessionID, sessionID);
 
         const workerPrompt = `${fullPrompt}\n\nInstructions:\n1. Understand the task and relevant file context.\n2. Make only necessary changes.\n3. Run the most relevant validation checks when practical.\n4. Stop when the requested task is done.\n\nReturn your final response in this format:\n\n<subtask_summary>\nStatus: completed | blocked | partial\n\nWhat changed:\n- ...\n\nFiles touched:\n- ...\n\nValidation:\n- ...\n\nRisks / follow-up:\n- ...\n</subtask_summary>`;
-        const serverUrl = ctx.serverUrl?.toString();
-        const ranViaCLI = serverUrl
-          ? await runSessionWithCLI({
-              serverUrl,
-              sessionId: childSessionID,
-              directory,
-              prompt: workerPrompt,
-              files,
-              abortSignal,
-            })
-          : false;
+        const ranViaCLI = await runSessionWithCLI({
+          serverUrl: resolveServerUrl(ctx),
+          sessionId: childSessionID,
+          directory,
+          prompt: workerPrompt,
+          files,
+          abortSignal,
+        });
 
         if (!ranViaCLI) {
           await promptWithTimeout(
